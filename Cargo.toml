@@ -1,0 +1,17 @@
+[package]
+name = "simplecar2"
+version = "0.1.0"
+edition = "2024"
+description = "Pure Rust arcade-sim vehicle dynamics, raycast suspension, drivetrain, and transmission from SimpleCar2"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bhubbard/simplecar2-rs"
+keywords = ["vehicle", "physics", "gamedev", "raycast", "suspension"]
+categories = ["game-development", "simulation", "science"]
+
+[dependencies]
+glam = { version = "0.29", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+
+[dev-dependencies]
+approx = "0.5"
