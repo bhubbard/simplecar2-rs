@@ -1,11 +1,11 @@
 # simplecar2-rs
 
 [![Crates.io](https://img.shields.io/badge/crates.io-v0.1.0-orange.svg)](https://crates.io/crates/simplecar2)
-[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-brightgreen?logo=github)](https://bhubbard.github.io/simplecar2-rs/)
+[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-brightgreen?logo=github)](https://code.brandonhubbard.com/simplecar2-rs/)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-brightgreen.svg)](https://www.rust-lang.org)
 
-🏎️ **[Explore the Live Interactive Vehicle Physics Simulator](https://bhubbard.github.io/simplecar2-rs/)**
+🏎️ **[Explore the Live Interactive Vehicle Physics Simulator](https://code.brandonhubbard.com/simplecar2-rs/)**
 
 Pure Rust arcade-sim vehicle dynamics, custom raycast suspension, drivetrain, transmission, differential, and Ackermann steering translated from Simon Vutov's [`SimpleCar2`](https://github.com/SimonVutov/SimpleCar2).
 
