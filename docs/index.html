@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>simplecar2-rs | Pure Rust Arcade-Sim Vehicle Physics</title>
+  <meta name="description" content="Pure Rust arcade-sim vehicle dynamics, custom raycast suspension, drivetrain, transmission, differential, and Ackermann steering.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- KaTeX for crisp math -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0a0d12;
+      --bg-surface: #111620;
+      --bg-card: #161c28;
+      --bg-card-hover: #1c2433;
+      --border-subtle: #222c3d;
+      --border-accent: #ff5500;
+      
+      --accent-orange: #ff5500;
+      --accent-orange-bright: #ff6b1a;
+      --accent-orange-glow: rgba(255, 85, 0, 0.35);
+      --accent-amber: #ffaa00;
+      --accent-yellow: #ffd000;
+      --accent-cyan: #00f0ff;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      
+      --font-heading: 'Chakra Petch', sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(255, 85, 0, 0.08) 0%, transparent 50%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
+      color: var(--text-main);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Header & Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10, 13, 18, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .nav-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, var(--accent-orange), #b33600);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      color: white;
+      box-shadow: 0 0 15px var(--accent-orange-glow);
+    }
+    .logo-title {
+      font-family: var(--font-heading);
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .logo-tag {
+      font-size: 0.75rem;
+      color: var(--accent-orange);
+      font-family: var(--font-mono);
+      background: rgba(255, 85, 0, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 85, 0, 0.2);
+    }
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-link:hover {
+      color: var(--accent-orange);
+    }
+    .btn-github {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #fff;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .btn-github:hover {
+      background: #374151;
+      border-color: var(--accent-orange);
+      box-shadow: 0 0 10px rgba(255, 85, 0, 0.2);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 5rem 0 3.5rem;
+      text-align: center;
+      position: relative;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(255, 85, 0, 0.12);
+      border: 1px solid rgba(255, 85, 0, 0.3);
+      color: var(--accent-orange-bright);
+      padding: 0.35rem 1rem;
+      border-radius: 9999px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      animation: pulse-glow 3s infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 15px rgba(255, 85, 0, 0.2); }
+      50% { box-shadow: 0 0 25px rgba(255, 85, 0, 0.4); }
+    }
+    .hero-title {
+      font-family: var(--font-heading);
+      font-size: 3.5rem;
+      line-height: 1.15;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .hero-title span {
+      background: linear-gradient(135deg, #fff 30%, var(--accent-orange-bright));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      max-width: 760px;
+      margin: 0 auto 2rem;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+    }
+    .badges-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+    .badge-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      padding: 0.3rem 0.75rem;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+    .hero-cta {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-orange), #d94300);
+      color: white;
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 0.75rem 1.75rem;
+      border-radius: 8px;
+      text-decoration: none;
+      box-shadow: 0 4px 20px var(--accent-orange-glow);
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(255, 85, 0, 0.5);
+    }
+    .btn-secondary {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 0.75rem 1.75rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      background: var(--bg-card);
+      border-color: var(--text-dim);
+    }
+
+    /* Section Styling */
+    section {
+      padding: 4rem 0;
+    }
+    .section-header {
+      margin-bottom: 2.5rem;
+      text-align: center;
+    }
+    .section-tag {
+      font-family: var(--font-mono);
+      color: var(--accent-orange);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    .section-title {
+      font-family: var(--font-heading);
+      font-size: 2.4rem;
+      font-weight: 700;
+    }
+    .section-desc {
+      color: var(--text-muted);
+      max-width: 650px;
+      margin: 0.5rem auto 0;
+      font-size: 1.05rem;
+    }
+
+    /* Simulator Panel */
+    .sim-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      margin-bottom: 4rem;
+    }
+    .sim-tabs {
+      display: flex;
+      background: #0d1219;
+      border-bottom: 1px solid var(--border-subtle);
+      overflow-x: auto;
+    }
+    .sim-tab-btn {
+      padding: 1rem 1.5rem;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-heading);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .sim-tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .sim-tab-btn.active {
+      color: var(--accent-orange);
+      border-bottom-color: var(--accent-orange);
+      background: rgba(255, 85, 0, 0.05);
+    }
+    .sim-tab-content {
+      display: none;
+      padding: 2rem;
+    }
+    .sim-tab-content.active {
+      display: block;
+    }
+
+    /* Sim Tab 1: Drivetrain & Tachometer */
+    .drivetrain-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: center;
+    }
+    @media (max-width: 900px) {
+      .drivetrain-grid { grid-template-columns: 1fr; }
+    }
+    .gauge-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: var(--bg-card);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+    }
+    .tach-canvas {
+      width: 100%;
+      max-width: 380px;
+      height: 280px;
+    }
+    .power-curve-canvas {
+      width: 100%;
+      height: 200px;
+      background: #0b0f16;
+      border-radius: 8px;
+      border: 1px solid #1a2332;
+      margin-top: 1rem;
+    }
+    .telemetry-readouts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-top: 1rem;
+      width: 100%;
+    }
+    .telem-card {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.6rem;
+      text-align: center;
+    }
+    .telem-label {
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+    .telem-val {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-orange-bright);
+    }
+    .controls-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .control-group {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .control-label-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .control-val {
+      font-family: var(--font-mono);
+      color: var(--accent-orange);
+      font-weight: 600;
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--accent-orange);
+      cursor: pointer;
+    }
+    .gear-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .gear-btn {
+      flex: 1;
+      min-width: 42px;
+      background: #0f1520;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-family: var(--font-heading);
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 0.6rem 0.2rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .gear-btn:hover {
+      border-color: var(--accent-orange);
+      color: white;
+    }
+    .gear-btn.active {
+      background: var(--accent-orange);
+      color: white;
+      border-color: var(--accent-orange);
+      box-shadow: 0 0 12px var(--accent-orange-glow);
+    }
+    .pedal-btn {
+      background: linear-gradient(180deg, #2b3648 0%, #171f2c 100%);
+      border: 2px solid #3b485d;
+      color: #fff;
+      font-family: var(--font-heading);
+      font-size: 1.2rem;
+      font-weight: 700;
+      padding: 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 4px 10px rgba(0,0,0,0.4);
+      user-select: none;
+      transition: all 0.1s;
+    }
+    .pedal-btn:active, .pedal-btn.pressed {
+      transform: scale(0.98);
+      background: linear-gradient(180deg, #e64d00 0%, #a83800 100%);
+      border-color: var(--accent-orange-bright);
+      box-shadow: 0 0 20px var(--accent-orange-glow);
+    }
+
+    /* Sim Tab 2: Suspension & ARB */
+    .susp-canvas-container {
+      position: relative;
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+    }
+    #suspCanvas {
+      width: 100%;
+      height: 380px;
+      display: block;
+    }
+
+    /* Sim Tab 3: Ackermann Geometry */
+    #ackermannCanvas {
+      width: 100%;
+      height: 420px;
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      display: block;
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 4rem;
+    }
+    .feature-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.75rem;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent-orange), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 85, 0, 0.4);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    .feature-card:hover::before {
+      opacity: 1;
+    }
+    .card-icon {
+      width: 44px;
+      height: 44px;
+      background: rgba(255, 85, 0, 0.1);
+      border: 1px solid rgba(255, 85, 0, 0.25);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      margin-bottom: 1.25rem;
+      color: var(--accent-orange-bright);
+    }
+    .card-title {
+      font-family: var(--font-heading);
+      font-size: 1.35rem;
+      margin-bottom: 0.65rem;
+      font-weight: 700;
+    }
+    .card-text {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+    }
+    .card-math {
+      background: #0d121a;
+      border: 1px solid #1a2332;
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 0.9rem;
+      color: #e2e8f0;
+      overflow-x: auto;
+    }
+
+    /* Code Snippets & Quickstart */
+    .code-box {
+      background: #0a0d13;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 3rem;
+    }
+    .code-header {
+      background: #111722;
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .code-title {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .btn-copy {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-copy:hover {
+      background: var(--accent-orange);
+      color: white;
+      border-color: var(--accent-orange);
+    }
+    pre code {
+      display: block;
+      padding: 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+    .kw { color: #ff7b72; font-weight: 600; }
+    .fn { color: #d2a8ff; }
+    .str { color: #a5d6ff; }
+    .num { color: #79c0ff; }
+    .cmt { color: #8b949e; font-style: italic; }
+    .typ { color: #ffa657; }
+
+    /* Test Results Matrix */
+    .tests-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 2rem;
+      margin-bottom: 4rem;
+    }
+    .tests-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 1.5rem;
+    }
+    .test-badge-big {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      font-family: var(--font-heading);
+      font-size: 1.2rem;
+      font-weight: 700;
+      padding: 0.5rem 1.25rem;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .test-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .test-suite-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 1.2rem;
+    }
+    .test-suite-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .test-suite-name {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+    .test-suite-count {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .test-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .test-status-ok {
+      color: #10b981;
+      font-size: 0.85rem;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 3rem 0;
+      background: #090c10;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header>
+    <div class="nav-container">
+      <a href="#" class="logo-group">
+        <div class="logo-icon">SC</div>
+        <div>
+          <div class="logo-title">simplecar2-rs <span class="logo-tag">v0.1.0</span></div>
+        </div>
+      </a>
+      <nav class="nav-links">
+        <a href="#simulator" class="nav-link">Simulator</a>
+        <a href="#features" class="nav-link">Architecture</a>
+        <a href="#mathematics" class="nav-link">Math & Physics</a>
+        <a href="#quickstart" class="nav-link">Quickstart</a>
+        <a href="#tests" class="nav-link">Tests (20/20)</a>
+        <a href="https://github.com/bhubbard/simplecar2-rs" target="_blank" class="btn-github">
+          <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">
+        <span>🏎️</span> PURE RUST ARCADE-SIM VEHICLE ENGINE
+      </div>
+      <h1 class="hero-title">
+        High Performance<br><span>Vehicle Dynamics</span>
+      </h1>
+      <p class="hero-subtitle">
+        Custom raycast suspension, anti-roll bars, combustion & EV drivetrains, automatic shifting, open/locked/LSD differentials, and true Ackermann steering for Bevy and game engines.
+      </p>
+      
+      <div class="badges-row">
+        <div class="badge-item"><span class="badge-dot"></span> 20 / 20 Tests Passed</div>
+        <div class="badge-item">⚡ Zero Engine Lock-in (glam + serde)</div>
+        <div class="badge-item">🦀 Rust 2024 Edition</div>
+        <div class="badge-item">⚖️ MIT / Apache-2.0 Dual License</div>
+      </div>
+
+      <div class="hero-cta">
+        <a href="#simulator" class="btn-primary">Launch Interactive Simulator</a>
+        <a href="#quickstart" class="btn-secondary">View Rust API Code</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Simulator Section -->
+  <section id="simulator">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Interactive Physics Sandbox</span>
+        <h2 class="section-title">Real-Time Vehicle Simulator</h2>
+        <p class="section-desc">Experience the exact mathematical models implemented in <code>simplecar2-rs</code> executing directly in your browser.</p>
+      </div>
+
+      <div class="sim-panel">
+        <div class="sim-tabs">
+          <button class="sim-tab-btn active" onclick="switchSimTab('drivetrain')">
+            <span>🔥</span> Drivetrain & Tachometer
+          </button>
+          <button class="sim-tab-btn" onclick="switchSimTab('suspension')">
+            <span>🛞</span> Raycast Suspension & ARB
+          </button>
+          <button class="sim-tab-btn" onclick="switchSimTab('ackermann')">
+            <span>📐</span> Ackermann Steering
+          </button>
+          <button class="sim-tab-btn" onclick="switchSimTab('diff')">
+            <span>⚙️</span> Differential Torque Split
+          </button>
+        </div>
+
+        <!-- TAB 1: DRIVETRAIN & TACHOMETER -->
+        <div id="tab-drivetrain" class="sim-tab-content active">
+          <div class="drivetrain-grid">
+            <div class="gauge-wrapper">
+              <canvas id="tachCanvas" class="tach-canvas" width="380" height="280"></canvas>
+              
+              <div class="telemetry-readouts">
+                <div class="telem-card">
+                  <div class="telem-label">Speed</div>
+                  <div id="telemSpeed" class="telem-val">0 km/h</div>
+                </div>
+                <div class="telem-card">
+                  <div class="telem-label">Gear</div>
+                  <div id="telemGear" class="telem-val">1</div>
+                </div>
+                <div class="telem-card">
+                  <div class="telem-label">Engine RPM</div>
+                  <div id="telemRpm" class="telem-val">850</div>
+                </div>
+              </div>
+
+              <!-- Power Curve Graph -->
+              <canvas id="powerCurveCanvas" class="power-curve-canvas" width="360" height="150"></canvas>
+            </div>
+
+            <div class="controls-wrapper">
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Powertrain Type</span>
+                  <span id="lblPowertrain" class="control-val">Combustion (ICE)</span>
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:0.4rem;">
+                  <button class="gear-btn active" id="btnModeICE" onclick="setPowertrainMode('ice')">ICE (Combustion)</button>
+                  <button class="gear-btn" id="btnModeEV" onclick="setPowertrainMode('ev')">EV (Constant Torque)</button>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Throttle Control (or Hold Spacebar)</span>
+                  <span id="lblThrottle" class="control-val">0%</span>
+                </div>
+                <input type="range" id="throttleSlider" min="0" max="100" value="0" oninput="updateThrottle(this.value)">
+                
+                <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+                  <button id="gasPedalBtn" class="pedal-btn" style="flex: 2;">
+                    🔥 Hold Gas Pedal
+                  </button>
+                  <button id="brakePedalBtn" class="pedal-btn" style="flex: 1; background: #3b1b1b; border-color: #5c2c2c;">
+                    🛑 Brake
+                  </button>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Transmission Shifter</span>
+                  <span id="lblTransMode" class="control-val">Automatic Shift</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                  <button class="gear-btn active" id="btnAutoShift" onclick="setTransMode('auto')">Auto Mode</button>
+                  <button class="gear-btn" id="btnManualShift" onclick="setTransMode('manual')">Manual Paddles</button>
+                </div>
+                <div class="gear-controls">
+                  <button class="gear-btn" id="gR" onclick="selectGear(-1)">R</button>
+                  <button class="gear-btn" id="gN" onclick="selectGear(0)">N</button>
+                  <button class="gear-btn active" id="g1" onclick="selectGear(1)">1</button>
+                  <button class="gear-btn" id="g2" onclick="selectGear(2)">2</button>
+                  <button class="gear-btn" id="g3" onclick="selectGear(3)">3</button>
+                  <button class="gear-btn" id="g4" onclick="selectGear(4)">4</button>
+                  <button class="gear-btn" id="g5" onclick="selectGear(5)">5</button>
+                  <button class="gear-btn" id="g6" onclick="selectGear(6)">6</button>
+                </div>
+                <div id="manualPaddles" style="display:none; margin-top:0.75rem; gap:0.5rem;">
+                  <button class="gear-btn" onclick="manualShiftDown()" style="flex:1;">◀ Shift Down [-]</button>
+                  <button class="gear-btn" onclick="manualShiftUp()" style="flex:1;">Shift Up [+] ▶</button>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Driveshaft Ratio Calculation</span>
+                  <span id="lblRatios" class="control-val">Ratio: 3.42 × 3.73 = 12.76:1</span>
+                </div>
+                <div style="font-size:0.8rem; color:var(--text-muted); font-family:var(--font-mono);">
+                  Clutch Capacity: <span id="lblClutchCap" style="color:#10b981;">100% Engaged</span> | Shift Delay: <span id="lblShiftDelay">0.0s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: SUSPENSION & ARB -->
+        <div id="tab-suspension" class="sim-tab-content">
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem;">
+            <div>
+              <div class="susp-canvas-container">
+                <canvas id="suspCanvas" width="600" height="380"></canvas>
+              </div>
+              <div style="display:flex; gap:0.5rem; margin-top:1rem; flex-wrap:wrap;">
+                <button class="gear-btn" onclick="triggerBump('left')">💥 Left Bump</button>
+                <button class="gear-btn" onclick="triggerBump('right')">💥 Right Bump</button>
+                <button class="gear-btn" onclick="triggerBump('both')">⚡ Axle Curb Strike</button>
+                <button class="gear-btn" onclick="triggerBump('slalom')">〰️ Slalom Sway</button>
+              </div>
+            </div>
+
+            <div class="controls-wrapper">
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Chassis Lateral Roll / Cornering G-Force</span>
+                  <span id="lblChassisRoll" class="control-val">0.00 G</span>
+                </div>
+                <input type="range" id="rollSlider" min="-100" max="100" value="0" oninput="updateRoll(this.value)">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Spring Stiffness ($k$)</span>
+                  <span id="lblSpringK" class="control-val">35,000 N/m</span>
+                </div>
+                <input type="range" id="kSlider" min="15000" max="70000" step="1000" value="35000" oninput="updateSuspParams()">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Damper Coefficient ($c$)</span>
+                  <span id="lblDamperC" class="control-val">3,200 N·s/m</span>
+                </div>
+                <input type="range" id="cSlider" min="1000" max="8000" step="200" value="3200" oninput="updateSuspParams()">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Anti-Roll Bar (ARB) Stiffness ($k_{\text{arb}}$)</span>
+                  <span id="lblArbK" class="control-val">16,000 N/m</span>
+                </div>
+                <input type="range" id="arbSlider" min="0" max="40000" step="1000" value="16000" oninput="updateSuspParams()">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Axle Dynamic Normal Loads ($F_z$)</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; text-align:center; font-family:var(--font-mono);">
+                  <div style="background:#0f1520; padding:0.5rem; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:var(--text-dim);">LEFT WHEEL</div>
+                    <div id="lblFzLeft" style="font-size:1.1rem; color:var(--accent-orange);">4,410 N</div>
+                  </div>
+                  <div style="background:#0f1520; padding:0.5rem; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:var(--text-dim);">RIGHT WHEEL</div>
+                    <div id="lblFzRight" style="font-size:1.1rem; color:var(--accent-orange);">4,410 N</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: ACKERMANN STEERING -->
+        <div id="tab-ackermann" class="sim-tab-content">
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem;">
+            <div>
+              <canvas id="ackermannCanvas" width="620" height="420"></canvas>
+            </div>
+            <div class="controls-wrapper">
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Driver Steering Wheel Input ($\delta$)</span>
+                  <span id="lblSteerInput" class="control-val">0.0°</span>
+                </div>
+                <input type="range" id="steerSlider" min="-35" max="35" step="0.5" value="0" oninput="updateSteer(this.value)">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Speed-Sensitive Steering Attenuation</span>
+                  <span id="lblSimSpeed" class="control-val">0 km/h (Full Lock)</span>
+                </div>
+                <input type="range" id="speedSteerSlider" min="0" max="200" step="5" value="0" oninput="updateSpeedSteer(this.value)">
+                <div style="font-size:0.8rem; color:var(--text-dim); margin-top:0.4rem; font-family:var(--font-mono);">
+                  Formula: $\delta_{\text{eff}} = \frac{\delta_{\text{max}} \cdot \text{input}}{1.0 + v \cdot k_{\text{speed}}}$
+                </div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Ackermann Kinematics</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; text-align:center; font-family:var(--font-mono); margin-bottom:0.75rem;">
+                  <div style="background:#0f1520; padding:0.5rem; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:var(--text-dim);">INNER WHEEL</div>
+                    <div id="lblInnerAngle" style="font-size:1.15rem; color:var(--accent-orange);">0.0°</div>
+                  </div>
+                  <div style="background:#0f1520; padding:0.5rem; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:var(--text-dim);">OUTER WHEEL</div>
+                    <div id="lblOuterAngle" style="font-size:1.15rem; color:var(--accent-cyan);">0.0°</div>
+                  </div>
+                </div>
+                <div style="font-family:var(--font-mono); font-size:0.85rem; color:var(--text-muted);">
+                  Turning Radius: <span id="lblTurnRadius" style="color:#fff;">∞ (Straight)</span><br>
+                  Wheelbase: 2.65 m | Track Width: 1.62 m
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: DIFFERENTIAL -->
+        <div id="tab-diff" class="sim-tab-content">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+            <div class="gauge-wrapper" style="justify-content:center;">
+              <canvas id="diffCanvas" width="380" height="300" style="width:100%; max-width:380px;"></canvas>
+            </div>
+            <div class="controls-wrapper">
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Differential Architecture</span>
+                  <span id="lblDiffType" class="control-val">Limited Slip (LSD)</span>
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:0.4rem;">
+                  <button class="gear-btn" id="btnDiffOpen" onclick="setDiffType('open')">Open</button>
+                  <button class="gear-btn" id="btnDiffLocked" onclick="setDiffType('locked')">Locked (Spool)</button>
+                  <button class="gear-btn active" id="btnDiffLSD" onclick="setDiffType('lsd')">Clutch-Pack LSD</button>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Tire Grip Disparity (Left on Ice vs Right on Asphalt)</span>
+                  <span id="lblGripDisparity" class="control-val">50% / 50%</span>
+                </div>
+                <input type="range" id="diffGripSlider" min="5" max="95" value="50" oninput="updateDiffGrip(this.value)">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Input Driveshaft Torque</span>
+                  <span id="lblInputTorque" class="control-val">600 N·m</span>
+                </div>
+                <input type="range" id="diffTorqueSlider" min="100" max="1500" step="50" value="600" oninput="updateDiffTorque(this.value)">
+              </div>
+
+              <div class="control-group">
+                <div class="control-label-row">
+                  <span>Delivered Wheel Torques</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; text-align:center; font-family:var(--font-mono);">
+                  <div style="background:#0f1520; padding:0.6rem; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:var(--text-dim);">LEFT WHEEL TORQUE</div>
+                    <div id="lblTorqueL" style="font-size:1.15rem; color:var(--accent-orange);">300 N·m</div>
+                  </div>
+                  <div style="background:#0f1520; padding:0.6rem; border-radius:6px;">
+                    <div style="font-size:0.75rem; color:var(--text-dim);">RIGHT WHEEL TORQUE</div>
+                    <div id="lblTorqueR" style="font-size:1.15rem; color:var(--accent-cyan);">300 N·m</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Architectural Features -->
+  <section id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Modular Mechanics</span>
+        <h2 class="section-title">Engineered For Performance</h2>
+        <p class="section-desc">Every subsystem in simplecar2-rs operates as a decoupled, deterministic state machine ready for Bevy ECS and network rollback.</p>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card">
+          <div class="card-icon">🛞</div>
+          <h3 class="card-title">Raycast Suspension & ARBs</h3>
+          <p class="card-text">
+            Simulates spring compression, bump & rebound damping, and anti-roll sway bar force transfer without expensive rigid body joint constraints.
+          </p>
+          <div class="card-math">
+            $$F_N = k \cdot x - c \cdot v \pm k_{\text{arb}} \cdot (x_L - x_R)$$
+          </div>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card">
+          <div class="card-icon">⚡</div>
+          <h3 class="card-title">Combustion & EV Drivetrains</h3>
+          <p class="card-text">
+            Dual powertrain modes: accurate combustion engine RPM torque curves with rev limiters, or instant flat-torque electric motor profiles with regenerative braking.
+          </p>
+          <div class="card-math">
+            $$P(t) = 0.3 + 0.7 \cdot t^2 \quad \text{for } RPM_{\text{idle}} \le RPM < RPM_{\text{peak}}$$
+          </div>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card">
+          <div class="card-icon">🕹️</div>
+          <h3 class="card-title">Automatic Transmission</h3>
+          <p class="card-text">
+            Multi-speed planetary or dual-clutch transmission with automatic upshift/downshift logic, rev-limiter safety overspeed shift, and shift torque cut.
+          </p>
+          <div class="card-math">
+            $$R_{\text{total}} = R_{\text{gear}} \cdot R_{\text{final}}, \quad T_{\text{shaft}} = T_{\text{eng}} \cdot R_{\text{total}}$$
+          </div>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card">
+          <div class="card-icon">⚙️</div>
+          <h3 class="card-title">Open, Locked & LSD Differentials</h3>
+          <p class="card-text">
+            Configurable final drive split: 50/50 open differential, 100% spooled locked differential with normal load bias, or clutch-pack limited slip with speed delta lockup.
+          </p>
+          <div class="card-math">
+            $$T_{\text{lock}} = \text{clamp}(k_{\text{lsd}} \Delta\omega + \text{sgn}(\Delta\omega) T_{\text{pre}}, -T_{\max}, T_{\max})$$
+          </div>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-card">
+          <div class="card-icon">📐</div>
+          <h3 class="card-title">True Ackermann Steering</h3>
+          <p class="card-text">
+            Calculates exact distinct inner and outer wheel turn angles to trace concentric circles, with velocity-sensitive high speed steering lock reduction.
+          </p>
+          <div class="card-math">
+            $$\delta_{\text{inner}} = \arctan\left(\frac{2L \tan\delta}{2L - W \tan\delta}\right)$$
+          </div>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card">
+          <div class="card-icon">🦀</div>
+          <h3 class="card-title">Pure Rust & Zero Engine Lock-in</h3>
+          <p class="card-text">
+            Built strictly on <code>glam</code> and <code>serde</code>. Easily drops into Bevy, Rapier, PhysX, or bespoke custom simulation pipelines with zero friction.
+          </p>
+          <div class="card-math">
+            $$\text{glam::Vec3}, \quad \text{glam::Quat}, \quad \text{serde::Serialize}$$
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mathematics Section -->
+  <section id="mathematics" style="background: rgba(17, 22, 32, 0.4);">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Formulations</span>
+        <h2 class="section-title">Mathematical Rigor</h2>
+        <p class="section-desc">The analytical physics models underlying the simplecar2-rs implementation.</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+        <div class="feature-card">
+          <h4 style="font-family:var(--font-heading); color:var(--accent-orange); margin-bottom:0.5rem;">Anti-Roll Bar Dynamics</h4>
+          <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:0.75rem;">
+            When cornering, centrifugal force produces chassis roll angle $\phi$, compressing the outer wheel ($x_{\text{outer}}$) and extending the inner wheel ($x_{\text{inner}}$). The sway bar creates equal and opposite corrective normal forces:
+          </p>
+          <div class="card-math">
+            $$\Delta x = x_{\text{left}} - x_{\text{right}}$$
+            $$F_{\text{arb}} = k_{\text{arb}} \cdot \Delta x$$
+            $$F_{N,\text{left}} = F_{\text{spring}} + F_{\text{damping}} - F_{\text{arb}}$$
+            $$F_{N,\text{right}} = F_{\text{spring}} + F_{\text{damping}} + F_{\text{arb}}$$
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <h4 style="font-family:var(--font-heading); color:var(--accent-orange); margin-bottom:0.5rem;">Clutch Torque Coupling</h4>
+          <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:0.75rem;">
+            Torque transfer between engine flywheel ($\omega_{\text{engine}}$) and transmission input shaft ($\omega_{\text{trans}}$) uses hyperbolic tangent friction smoothing:
+          </p>
+          <div class="card-math">
+            $$T_{\text{capacity}} = \gamma \cdot T_{\text{max\_clutch}}$$
+            $$T_{\text{clutch}} = T_{\text{capacity}} \cdot \tanh\left(0.1 \cdot (\omega_{\text{engine}} - \omega_{\text{trans}})\right)$$
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quickstart Code Section -->
+  <section id="quickstart">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Integration</span>
+        <h2 class="section-title">Quick Start Guide</h2>
+        <p class="section-desc">Drop simplecar2 into your Cargo.toml and initialize your vehicle state machine in seconds.</p>
+      </div>
+
+      <div class="code-box">
+        <div class="code-header">
+          <span class="code-title">Cargo.toml</span>
+          <button class="btn-copy" onclick="copyCode('cargoCode')">Copy</button>
+        </div>
+        <pre><code id="cargoCode"><span class="cmt"># Add to your dependencies</span>
+<span class="typ">[dependencies]</span>
+<span class="kw">simplecar2</span> = <span class="str">"0.1"</span>
+<span class="kw">glam</span> = <span class="str">"0.29"</span></code></pre>
+      </div>
+
+      <div class="code-box">
+        <div class="code-header">
+          <span class="code-title">main.rs</span>
+          <button class="btn-copy" onclick="copyCode('rustCode')">Copy</button>
+        </div>
+        <pre><code id="rustCode"><span class="kw">use</span> <span class="typ">glam</span>::{<span class="typ">Quat</span>, <span class="typ">Vec3</span>};
+<span class="kw">use</span> <span class="typ">simplecar2::prelude</span>::*;
+
+<span class="kw">fn</span> <span class="fn">main</span>() {
+    <span class="cmt">// 1. Configure vehicle chassis, suspension & powertrain</span>
+    <span class="kw">let</span> <span class="kw">mut</span> vehicle = <span class="typ">Vehicle</span>::<span class="fn">new</span>(<span class="typ">VehicleConfig</span>::<span class="fn">default</span>());
+
+    <span class="cmt">// 2. Supply driver inputs</span>
+    <span class="kw">let</span> inputs = <span class="typ">VehicleInputs</span> {
+        steer: <span class="num">0.25</span>,        <span class="cmt">// Steer angle [-1.0, 1.0]</span>
+        throttle: <span class="num">0.85</span>,     <span class="cmt">// 85% throttle</span>
+        brake: <span class="num">0.0</span>,
+        handbrake: <span class="kw">false</span>,
+        clutch_pedal: <span class="num">0.0</span>,  <span class="cmt">// Clutch engaged</span>
+    };
+
+    <span class="cmt">// 3. Provide raycast contact results from physics world (Rapier, XPBD, etc.)</span>
+    <span class="kw">let</span> hits = [
+        <span class="typ">Some</span>(<span class="typ">WheelRaycastHit</span> { distance: <span class="num">0.40</span>, point: <span class="typ">Vec3</span>::<span class="fn">new</span>(-<span class="num">0.81</span>, <span class="num">0.0</span>, <span class="num">1.35</span>), normal: <span class="typ">Vec3</span>::<span class="typ">Y</span> }),
+        <span class="typ">Some</span>(<span class="typ">WheelRaycastHit</span> { distance: <span class="num">0.40</span>, point: <span class="typ">Vec3</span>::<span class="fn">new</span>(<span class="num">0.81</span>, <span class="num">0.0</span>, <span class="num">1.35</span>), normal: <span class="typ">Vec3</span>::<span class="typ">Y</span> }),
+        <span class="typ">Some</span>(<span class="typ">WheelRaycastHit</span> { distance: <span class="num">0.40</span>, point: <span class="typ">Vec3</span>::<span class="fn">new</span>(-<span class="num">0.81</span>, <span class="num">0.0</span>, -<span class="num">1.30</span>), normal: <span class="typ">Vec3</span>::<span class="typ">Y</span> }),
+        <span class="typ">Some</span>(<span class="typ">WheelRaycastHit</span> { distance: <span class="num">0.40</span>, point: <span class="typ">Vec3</span>::<span class="fn">new</span>(<span class="num">0.81</span>, <span class="num">0.0</span>, -<span class="num">1.30</span>), normal: <span class="typ">Vec3</span>::<span class="typ">Y</span> }),
+    ];
+
+    <span class="cmt">// 4. Advance physics step</span>
+    <span class="kw">let</span> forces = vehicle.<span class="fn">step</span>(
+        &inputs, hits,
+        <span class="typ">Vec3</span>::<span class="fn">new</span>(<span class="num">0.0</span>, <span class="num">0.45</span>, <span class="num">0.0</span>),
+        <span class="typ">Quat</span>::<span class="typ">IDENTITY</span>,
+        <span class="typ">Vec3</span>::<span class="fn">new</span>(<span class="num">0.0</span>, <span class="num">0.0</span>, <span class="num">14.0</span>),
+        <span class="typ">Vec3</span>::<span class="typ">ZERO</span>,
+        <span class="num">1.0</span> / <span class="num">60.0</span>,
+    ).<span class="fn">unwrap</span>();
+
+    <span class="fn">println!</span>(<span class="str">"Total force: {:?}"</span>, forces.total_force);
+    <span class="fn">println!</span>(<span class="str">"Engine RPM: {:.0}"</span>, vehicle.engine_state.rpm);
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Test Results Section -->
+  <section id="tests">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Verification</span>
+        <h2 class="section-title">Automated Test Suite</h2>
+        <p class="section-desc">100% pass rate across the full vehicle physics specification.</p>
+      </div>
+
+      <div class="tests-panel">
+        <div class="tests-summary">
+          <div>
+            <div style="font-family:var(--font-heading); font-size:1.5rem; font-weight:700;">20 Tests Passed</div>
+            <div style="color:var(--text-muted); font-size:0.85rem; font-family:var(--font-mono);">0 failed · 0 ignored · 6 integration suites</div>
+          </div>
+          <div class="test-badge-big">
+            ✓ ALL TESTS PASSING
+          </div>
+        </div>
+
+        <div class="test-grid">
+          <!-- Differential Tests -->
+          <div class="test-suite-card">
+            <div class="test-suite-header">
+              <span class="test-suite-name">differential_tests</span>
+              <span class="test-suite-count">3/3</span>
+            </div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_open_differential</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_locked_differential</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_limited_slip_differential</div>
+          </div>
+
+          <!-- Drivetrain Tests -->
+          <div class="test-suite-card">
+            <div class="test-suite-header">
+              <span class="test-suite-name">drivetrain_tests</span>
+              <span class="test-suite-count">4/4</span>
+            </div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_engine_power_curve</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_clutch_torque_transfer</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_constant_torque_mode</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_engine_state_update</div>
+          </div>
+
+          <!-- Steering Tests -->
+          <div class="test-suite-card">
+            <div class="test-suite-header">
+              <span class="test-suite-name">steering_tests</span>
+              <span class="test-suite-count">4/4</span>
+            </div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_ackermann_geometry_left_turn</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_ackermann_geometry_right_turn</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_speed_sensitive_steering_reduction</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_steering_state_update_smoothing</div>
+          </div>
+
+          <!-- Suspension Tests -->
+          <div class="test-suite-card">
+            <div class="test-suite-header">
+              <span class="test-suite-name">suspension_tests</span>
+              <span class="test-suite-count">3/3</span>
+            </div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_suspension_spring_and_damping</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_anti_roll_bar</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_suspension_airborne</div>
+          </div>
+
+          <!-- Transmission Tests -->
+          <div class="test-suite-card">
+            <div class="test-suite-header">
+              <span class="test-suite-name">transmission_tests</span>
+              <span class="test-suite-count">4/4</span>
+            </div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_gear_ratios_and_total_ratio</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_automatic_shifting_upshift_and_downshift</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_manual_shifting</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_rev_limiter_safety_upshift</div>
+          </div>
+
+          <!-- Vehicle Tests -->
+          <div class="test-suite-card">
+            <div class="test-suite-header">
+              <span class="test-suite-name">vehicle_tests</span>
+              <span class="test-suite-count">2/2</span>
+            </div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_vehicle_initialization_and_grounded_step</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_vehicle_acceleration_and_braking</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container footer-content">
+      <div>
+        <div style="font-family:var(--font-heading); color:#fff; font-size:1.1rem; font-weight:700;">simplecar2-rs</div>
+        <p style="margin-top:0.25rem;">Translated from Simon Vutov's SimpleCar2 for the Rust & Bevy ecosystem.</p>
+      </div>
+      <div>
+        Released under MIT & Apache 2.0 dual licenses.
+      </div>
+    </div>
+  </footer>
+
+  <!-- Interactive JavaScript Engine -->
+  <script>
+    // Tab Switching
+    function switchSimTab(tabId) {
+      document.querySelectorAll('.sim-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.sim-tab-content').forEach(c => c.classList.remove('active'));
+      
+      const btn = event.currentTarget;
+      btn.classList.add('active');
+      document.getElementById('tab-' + tabId).classList.add('active');
+      
+      if (tabId === 'suspension') renderSuspension();
+      if (tabId === 'ackermann') renderAckermann();
+      if (tabId === 'diff') renderDiff();
+    }
+
+    function copyCode(id) {
+      const code = document.getElementById(id).innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Copied to clipboard!');
+      });
+    }
+
+    // -------------------------------------------------------------
+    // SIMULATOR 1: Drivetrain & Tachometer
+    // -------------------------------------------------------------
+    const GEAR_RATIOS = {
+      '-1': -3.2,
+      '0': 0.0,
+      '1': 3.42,
+      '2': 2.14,
+      '3': 1.45,
+      '4': 1.03,
+      '5': 0.81,
+      '6': 0.65
+    };
+    const FINAL_DRIVE = 3.73;
+    const WHEEL_RADIUS = 0.34; // meters
+
+    let simState = {
+      rpm: 850,
+      targetRpm: 850,
+      speedKmh: 0,
+      gear: 1,
+      throttle: 0.0,
+      braking: 0.0,
+      mode: 'ice', // 'ice' or 'ev'
+      transMode: 'auto', // 'auto' or 'manual'
+      shiftCooldown: 0.0,
+      isRevLimiter: false,
+      clutchEngaged: 1.0,
+    };
+
+    const tachCanvas = document.getElementById('tachCanvas');
+    const tachCtx = tachCanvas.getContext('2d');
+    const powerCurveCanvas = document.getElementById('powerCurveCanvas');
+    const pCurveCtx = powerCurveCanvas.getContext('2d');
+
+    function setPowertrainMode(m) {
+      simState.mode = m;
+      document.getElementById('btnModeICE').classList.toggle('active', m === 'ice');
+      document.getElementById('btnModeEV').classList.toggle('active', m === 'ev');
+      document.getElementById('lblPowertrain').innerText = m === 'ice' ? 'Combustion (ICE)' : 'Electric Motor (EV)';
+    }
+
+    function setTransMode(m) {
+      simState.transMode = m;
+      document.getElementById('btnAutoShift').classList.toggle('active', m === 'auto');
+      document.getElementById('btnManualShift').classList.toggle('active', m === 'manual');
+      document.getElementById('lblTransMode').innerText = m === 'auto' ? 'Automatic Shift' : 'Manual Paddles';
+      document.getElementById('manualPaddles').style.display = m === 'manual' ? 'flex' : 'none';
+    }
+
+    function selectGear(g) {
+      simState.gear = g;
+      simState.shiftCooldown = 0.35;
+      updateGearUI();
+    }
+
+    function manualShiftUp() {
+      if (simState.gear < 6) selectGear(simState.gear === -1 ? 0 : simState.gear + 1);
+    }
+    function manualShiftDown() {
+      if (simState.gear > -1) selectGear(simState.gear - 1);
+    }
+
+    function updateGearUI() {
+      for (let g = -1; g <= 6; g++) {
+        const id = g === -1 ? 'gR' : (g === 0 ? 'gN' : 'g' + g);
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('active', simState.gear === g);
+      }
+      document.getElementById('telemGear').innerText = simState.gear === -1 ? 'R' : (simState.gear === 0 ? 'N' : simState.gear);
+      
+      const curRatio = GEAR_RATIOS[simState.gear] || 0;
+      const totRatio = (curRatio * FINAL_DRIVE).toFixed(2);
+      document.getElementById('lblRatios').innerText = `Ratio: ${curRatio.toFixed(2)} × ${FINAL_DRIVE} = ${totRatio}:1`;
+    }
+
+    function updateThrottle(val) {
+      simState.throttle = parseFloat(val) / 100;
+      document.getElementById('lblThrottle').innerText = Math.round(val) + '%';
+    }
+
+    // Pedal mouse events
+    const gasBtn = document.getElementById('gasPedalBtn');
+    let gasInterval = null;
+    function startGas() {
+      gasBtn.classList.add('pressed');
+      simState.throttle = 1.0;
+      document.getElementById('throttleSlider').value = 100;
+      document.getElementById('lblThrottle').innerText = '100%';
+    }
+    function stopGas() {
+      gasBtn.classList.remove('pressed');
+      simState.throttle = 0.0;
+      document.getElementById('throttleSlider').value = 0;
+      document.getElementById('lblThrottle').innerText = '0%';
+    }
+    gasBtn.addEventListener('mousedown', startGas);
+    window.addEventListener('mouseup', stopGas);
+    gasBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startGas(); });
+    window.addEventListener('touchend', stopGas);
+
+    const brakeBtn = document.getElementById('brakePedalBtn');
+    brakeBtn.addEventListener('mousedown', () => { simState.braking = 1.0; });
+    window.addEventListener('mouseup', () => { simState.braking = 0.0; });
+
+    // Keyboard Spacebar for Throttle
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') {
+        e.preventDefault();
+        startGas();
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') {
+        stopGas();
+      }
+    });
+
+    // Combustion Power Curve formulation from README
+    function evalPowerCurve(rpm) {
+      const idle = 850;
+      const peak = 6200;
+      const max = 7600;
+      if (rpm < idle) return 0.2;
+      if (rpm < peak) {
+        const t = (rpm - idle) / (peak - idle);
+        return 0.3 + 0.7 * (t * t);
+      }
+      if (rpm < max) {
+        const t = (rpm - peak) / (max - peak);
+        return 1.0 - 0.9 * t;
+      }
+      return 0.0; // Rev limiter fuel cut
+    }
+
+    // Physics Loop for Drivetrain
+    let lastTime = performance.now();
+    function drivetrainLoop(currentTime) {
+      const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
+      lastTime = currentTime;
+
+      if (simState.shiftCooldown > 0) {
+        simState.shiftCooldown -= dt;
+      }
+
+      const idleRpm = 850;
+      const redlineRpm = 7500;
+      const curRatio = GEAR_RATIOS[simState.gear] || 0;
+
+      // Wheel speed to RPM linkage
+      const speedMs = (simState.speedKmh * 1000) / 3600;
+      const wheelAngVel = speedMs / WHEEL_RADIUS;
+      const drivetrainRpm = Math.abs(wheelAngVel * (curRatio * FINAL_DRIVE) * (60 / (2 * Math.PI)));
+
+      if (simState.gear === 0) {
+        // Neutral revving
+        if (simState.throttle > 0.01) {
+          simState.rpm += simState.throttle * 9000 * dt;
+        } else {
+          simState.rpm -= 3500 * dt;
+        }
+      } else {
+        // Connected gear drive
+        const enginePower = simState.mode === 'ice' ? evalPowerCurve(simState.rpm) : 1.0;
+        
+        if (simState.throttle > 0.01) {
+          const accel = enginePower * simState.throttle * 40 * Math.sign(curRatio);
+          simState.speedKmh += accel * dt;
+        } else {
+          // Engine braking & rolling resistance
+          simState.speedKmh -= Math.sign(simState.speedKmh) * Math.min(Math.abs(simState.speedKmh), 15 * dt);
+        }
+
+        if (simState.braking > 0.01) {
+          simState.speedKmh -= Math.sign(simState.speedKmh) * Math.min(Math.abs(simState.speedKmh), 90 * dt);
+        }
+
+        simState.rpm = Math.max(idleRpm, drivetrainRpm);
+      }
+
+      // Rev limiter bounce
+      if (simState.rpm >= redlineRpm) {
+        simState.isRevLimiter = true;
+        simState.rpm = redlineRpm - 200 + (Math.random() * 80);
+      } else {
+        simState.isRevLimiter = false;
+      }
+      simState.rpm = Math.max(idleRpm, Math.min(redlineRpm + 100, simState.rpm));
+
+      // Automatic Shifting Logic
+      if (simState.transMode === 'auto' && simState.shiftCooldown <= 0) {
+        if (simState.gear >= 1 && simState.gear < 6 && simState.rpm > 6200 && simState.throttle > 0.3) {
+          selectGear(simState.gear + 1);
+        } else if (simState.gear > 1 && simState.rpm < 2100 && simState.speedKmh > 5) {
+          selectGear(simState.gear - 1);
+        } else if (simState.rpm > 7300 && simState.gear < 6) {
+          // Safety upshift
+          selectGear(simState.gear + 1);
+        }
+      }
+
+      // Update UI readouts
+      document.getElementById('telemRpm').innerText = Math.round(simState.rpm);
+      document.getElementById('telemSpeed').innerText = Math.max(0, Math.round(Math.abs(simState.speedKmh))) + ' km/h';
+
+      renderTachometer();
+      renderPowerCurve();
+      requestAnimationFrame(drivetrainLoop);
+    }
+
+    function renderTachometer() {
+      const w = tachCanvas.width;
+      const h = tachCanvas.height;
+      tachCtx.clearRect(0, 0, w, h);
+
+      const cx = w / 2;
+      const cy = h * 0.72;
+      const radius = 115;
+      const startAngle = Math.PI * 0.75;
+      const endAngle = Math.PI * 2.25;
+
+      // Arc background
+      tachCtx.beginPath();
+      tachCtx.arc(cx, cy, radius, startAngle, endAngle);
+      tachCtx.lineWidth = 14;
+      tachCtx.strokeStyle = '#1a2332';
+      tachCtx.lineCap = 'round';
+      tachCtx.stroke();
+
+      // Redline sector (7000 - 8000 RPM)
+      const redlineStart = startAngle + (7000 / 8000) * (endAngle - startAngle);
+      tachCtx.beginPath();
+      tachCtx.arc(cx, cy, radius, redlineStart, endAngle);
+      tachCtx.lineWidth = 14;
+      tachCtx.strokeStyle = '#ef4444';
+      tachCtx.stroke();
+
+      // Active RPM sweep
+      const sweepAngle = startAngle + (Math.min(simState.rpm, 8000) / 8000) * (endAngle - startAngle);
+      tachCtx.beginPath();
+      tachCtx.arc(cx, cy, radius, startAngle, sweepAngle);
+      tachCtx.lineWidth = 14;
+      tachCtx.strokeStyle = simState.rpm > 7000 ? '#ff3300' : '#ff6b1a';
+      tachCtx.stroke();
+
+      // Ticks & Numbers
+      for (let i = 0; i <= 8; i++) {
+        const angle = startAngle + (i / 8) * (endAngle - startAngle);
+        const tx1 = cx + Math.cos(angle) * (radius - 12);
+        const ty1 = cy + Math.sin(angle) * (radius - 12);
+        const tx2 = cx + Math.cos(angle) * (radius - 22);
+        const ty2 = cy + Math.sin(angle) * (radius - 22);
+
+        tachCtx.beginPath();
+        tachCtx.moveTo(tx1, ty1);
+        tachCtx.lineTo(tx2, ty2);
+        tachCtx.lineWidth = i >= 7 ? 3 : 2;
+        tachCtx.strokeStyle = i >= 7 ? '#ef4444' : '#64748b';
+        tachCtx.stroke();
+
+        const nx = cx + Math.cos(angle) * (radius - 36);
+        const ny = cy + Math.sin(angle) * (radius - 36);
+        tachCtx.fillStyle = i >= 7 ? '#ef4444' : '#94a3b8';
+        tachCtx.font = '600 13px "Chakra Petch", sans-serif';
+        tachCtx.textAlign = 'center';
+        tachCtx.textBaseline = 'middle';
+        tachCtx.fillText(i, nx, ny);
+      }
+
+      // Needle
+      tachCtx.save();
+      tachCtx.translate(cx, cy);
+      tachCtx.rotate(sweepAngle);
+      tachCtx.beginPath();
+      tachCtx.moveTo(-15, 0);
+      tachCtx.lineTo(radius - 8, 0);
+      tachCtx.lineWidth = 4;
+      tachCtx.strokeStyle = simState.isRevLimiter ? '#ff0000' : '#ffffff';
+      tachCtx.shadowColor = 'rgba(255, 85, 0, 0.8)';
+      tachCtx.shadowBlur = 10;
+      tachCtx.stroke();
+      tachCtx.restore();
+
+      // Center Hub
+      tachCtx.beginPath();
+      tachCtx.arc(cx, cy, 22, 0, Math.PI * 2);
+      tachCtx.fillStyle = '#111620';
+      tachCtx.fill();
+      tachCtx.lineWidth = 3;
+      tachCtx.strokeStyle = '#ff5500';
+      tachCtx.stroke();
+
+      // Gear inside hub
+      tachCtx.fillStyle = '#fff';
+      tachCtx.font = '700 18px "Chakra Petch", sans-serif';
+      tachCtx.textAlign = 'center';
+      tachCtx.textBaseline = 'middle';
+      tachCtx.fillText(simState.gear === -1 ? 'R' : (simState.gear === 0 ? 'N' : simState.gear), cx, cy);
+    }
+
+    function renderPowerCurve() {
+      const w = powerCurveCanvas.width;
+      const h = powerCurveCanvas.height;
+      pCurveCtx.clearRect(0, 0, w, h);
+
+      // Grid
+      pCurveCtx.strokeStyle = '#16202e';
+      pCurveCtx.lineWidth = 1;
+      pCurveCtx.beginPath();
+      for (let x = 40; x < w; x += 40) {
+        pCurveCtx.moveTo(x, 10);
+        pCurveCtx.lineTo(x, h - 25);
+      }
+      for (let y = 20; y < h - 25; y += 25) {
+        pCurveCtx.moveTo(35, y);
+        pCurveCtx.lineTo(w - 10, y);
+      }
+      pCurveCtx.stroke();
+
+      // Axes & Labels
+      pCurveCtx.fillStyle = '#64748b';
+      pCurveCtx.font = '10px "JetBrains Mono"';
+      pCurveCtx.fillText('POWER', 5, 15);
+      pCurveCtx.fillText('0 RPM', 35, h - 10);
+      pCurveCtx.fillText('8000 RPM', w - 55, h - 10);
+
+      // Draw Power Curve
+      pCurveCtx.beginPath();
+      pCurveCtx.strokeStyle = '#ff6b1a';
+      pCurveCtx.lineWidth = 2.5;
+
+      const plotW = w - 50;
+      const plotH = h - 45;
+
+      for (let r = 0; r <= 8000; r += 100) {
+        const px = 35 + (r / 8000) * plotW;
+        const pwr = evalPowerCurve(r);
+        const py = (h - 25) - pwr * plotH;
+        if (r === 0) pCurveCtx.moveTo(px, py);
+        else pCurveCtx.lineTo(px, py);
+      }
+      pCurveCtx.stroke();
+
+      // Operating point dot
+      const curX = 35 + (Math.min(simState.rpm, 8000) / 8000) * plotW;
+      const curPwr = evalPowerCurve(simState.rpm);
+      const curY = (h - 25) - curPwr * plotH;
+
+      pCurveCtx.beginPath();
+      pCurveCtx.arc(curX, curY, 6, 0, Math.PI * 2);
+      pCurveCtx.fillStyle = '#ffaa00';
+      pCurveCtx.shadowColor = '#ff5500';
+      pCurveCtx.shadowBlur = 12;
+      pCurveCtx.fill();
+      pCurveCtx.shadowBlur = 0;
+    }
+
+    // -------------------------------------------------------------
+    // SIMULATOR 2: Raycast Suspension & ARB
+    // -------------------------------------------------------------
+    let suspState = {
+      k: 35000,
+      c: 3200,
+      kArb: 16000,
+      rollG: 0,
+      leftBump: 0,
+      rightBump: 0,
+      leftVel: 0,
+      rightVel: 0,
+      leftPos: 0,
+      rightPos: 0
+    };
+
+    function updateSuspParams() {
+      suspState.k = parseFloat(document.getElementById('kSlider').value);
+      suspState.c = parseFloat(document.getElementById('cSlider').value);
+      suspState.kArb = parseFloat(document.getElementById('arbSlider').value);
+      document.getElementById('lblSpringK').innerText = suspState.k.toLocaleString() + ' N/m';
+      document.getElementById('lblDamperC').innerText = suspState.c.toLocaleString() + ' N·s/m';
+      document.getElementById('lblArbK').innerText = suspState.kArb.toLocaleString() + ' N/m';
+    }
+
+    function updateRoll(val) {
+      suspState.rollG = parseFloat(val) / 100;
+      document.getElementById('lblChassisRoll').innerText = (suspState.rollG).toFixed(2) + ' G';
+    }
+
+    function triggerBump(type) {
+      if (type === 'left') suspState.leftVel += 1.8;
+      if (type === 'right') suspState.rightVel += 1.8;
+      if (type === 'both') {
+        suspState.leftVel += 2.0;
+        suspState.rightVel += 2.0;
+      }
+      if (type === 'slalom') {
+        suspState.leftVel += 1.5;
+        suspState.rightVel -= 1.5;
+      }
+    }
+
+    const suspCanvas = document.getElementById('suspCanvas');
+    const suspCtx = suspCanvas.getContext('2d');
+
+    function renderSuspension() {
+      const w = suspCanvas.width;
+      const h = suspCanvas.height;
+      suspCtx.clearRect(0, 0, w, h);
+
+      // Simulation step for suspension physics
+      const dt = 0.02;
+      const restLen = 0.45; // m
+      const sprungMass = 450; // kg per corner
+
+      // Roll induced displacement offset
+      const rollDisp = suspState.rollG * 0.12;
+
+      // ARB delta
+      const deltaX = (suspState.leftPos - rollDisp) - (suspState.rightPos + rollDisp);
+      const arbForce = suspState.kArb * deltaX;
+
+      // Left corner
+      const leftSpringF = suspState.k * (suspState.leftPos - rollDisp);
+      const leftDampF = suspState.c * suspState.leftVel;
+      const leftNetF = -leftSpringF - leftDampF - arbForce;
+      const leftAcc = leftNetF / sprungMass;
+      suspState.leftVel += leftAcc * dt;
+      suspState.leftPos += suspState.leftVel * dt;
+
+      // Right corner
+      const rightSpringF = suspState.k * (suspState.rightPos + rollDisp);
+      const rightDampF = suspState.c * suspState.rightVel;
+      const rightNetF = -rightSpringF - rightDampF + arbForce;
+      const rightAcc = rightNetF / sprungMass;
+      suspState.rightVel += rightAcc * dt;
+      suspState.rightPos += suspState.rightVel * dt;
+
+      // Normal forces
+      const baseFz = 4410; // N
+      const fzL = Math.max(0, baseFz + leftSpringF + leftDampF + arbForce);
+      const fzR = Math.max(0, baseFz + rightSpringF + rightDampF - arbForce);
+      document.getElementById('lblFzLeft').innerText = Math.round(fzL).toLocaleString() + ' N';
+      document.getElementById('lblFzRight').innerText = Math.round(fzR).toLocaleString() + ' N';
+
+      // Ground plane
+      const groundY = h - 60;
+      suspCtx.strokeStyle = '#222c3d';
+      suspCtx.lineWidth = 3;
+      suspCtx.beginPath();
+      suspCtx.moveTo(40, groundY);
+      suspCtx.lineTo(w - 40, groundY);
+      suspCtx.stroke();
+
+      // Chassis Body (tilted by roll)
+      const chassisY = 90;
+      const rollAngleRad = (suspState.leftPos - suspState.rightPos) * 0.15 + (suspState.rollG * 0.1);
+      
+      suspCtx.save();
+      suspCtx.translate(w / 2, chassisY);
+      suspCtx.rotate(rollAngleRad);
+      
+      // Draw chassis rectangle
+      suspCtx.fillStyle = '#161c28';
+      suspCtx.strokeStyle = '#ff5500';
+      suspCtx.lineWidth = 3;
+      suspCtx.beginPath();
+      suspCtx.roundRect(-220, -30, 440, 60, 8);
+      suspCtx.fill();
+      suspCtx.stroke();
+      
+      suspCtx.fillStyle = '#fff';
+      suspCtx.font = '700 13px "Chakra Petch"';
+      suspCtx.textAlign = 'center';
+      suspCtx.fillText('CHASSIS RIGID BODY & ROLL AXIS', 0, 5);
+      suspCtx.restore();
+
+      // Wheels & Springs
+      const leftWheelX = 140;
+      const rightWheelX = w - 140;
+      const wheelY = groundY - 45;
+
+      drawWheelAndSpring(leftWheelX, chassisY + 30 - suspState.leftPos * 80, wheelY, '#ff6b1a', 'LEFT WHEEL');
+      drawWheelAndSpring(rightWheelX, chassisY + 30 - suspState.rightPos * 80, wheelY, '#00f0ff', 'RIGHT WHEEL');
+
+      // Sway Bar (Anti-Roll Bar) connecting left and right
+      suspCtx.strokeStyle = '#ffaa00';
+      suspCtx.lineWidth = 5;
+      suspCtx.beginPath();
+      suspCtx.moveTo(leftWheelX + 25, chassisY + 130 - suspState.leftPos * 40);
+      suspCtx.lineTo(w / 2, chassisY + 160);
+      suspCtx.lineTo(rightWheelX - 25, chassisY + 130 - suspState.rightPos * 40);
+      suspCtx.stroke();
+
+      suspCtx.fillStyle = '#ffaa00';
+      suspCtx.font = '600 11px "JetBrains Mono"';
+      suspCtx.textAlign = 'center';
+      suspCtx.fillText(`ANTI-ROLL BAR (Δx: ${(deltaX*100).toFixed(1)} cm)`, w / 2, chassisY + 180);
+    }
+
+    function drawWheelAndSpring(x, topY, bottomY, color, label) {
+      // Wheel
+      suspCtx.fillStyle = '#0f172a';
+      suspCtx.strokeStyle = '#475569';
+      suspCtx.lineWidth = 3;
+      suspCtx.beginPath();
+      suspCtx.roundRect(x - 28, bottomY - 35, 56, 70, 10);
+      suspCtx.fill();
+      suspCtx.stroke();
+
+      // Tire Tread Markings
+      suspCtx.strokeStyle = '#1e293b';
+      suspCtx.lineWidth = 2;
+      for (let ty = bottomY - 25; ty <= bottomY + 25; ty += 12) {
+        suspCtx.beginPath();
+        suspCtx.moveTo(x - 24, ty);
+        suspCtx.lineTo(x + 24, ty);
+        suspCtx.stroke();
+      }
+
+      // Suspension Strut & Coil
+      const coilTop = topY;
+      const coilBottom = bottomY - 35;
+      const coilH = coilBottom - coilTop;
+      const coils = 7;
+
+      suspCtx.strokeStyle = color;
+      suspCtx.lineWidth = 4;
+      suspCtx.beginPath();
+      suspCtx.moveTo(x, coilTop);
+      for (let i = 0; i <= coils; i++) {
+        const cy = coilTop + (i / coils) * coilH;
+        const cx = x + (i % 2 === 0 ? -16 : 16);
+        suspCtx.lineTo(cx, cy);
+      }
+      suspCtx.lineTo(x, coilBottom);
+      suspCtx.stroke();
+
+      // Label
+      suspCtx.fillStyle = '#94a3b8';
+      suspCtx.font = '600 11px "JetBrains Mono"';
+      suspCtx.textAlign = 'center';
+      suspCtx.fillText(label, x, bottomY + 50);
+    }
+
+    // -------------------------------------------------------------
+    // SIMULATOR 3: Ackermann Steering
+    // -------------------------------------------------------------
+    let steerState = {
+      angleDeg: 0,
+      speedKmh: 0,
+      wheelbase: 2.65, // m
+      trackWidth: 1.62 // m
+    };
+
+    function updateSteer(val) {
+      steerState.angleDeg = parseFloat(val);
+      document.getElementById('lblSteerInput').innerText = steerState.angleDeg.toFixed(1) + '°';
+      renderAckermann();
+    }
+
+    function updateSpeedSteer(val) {
+      steerState.speedKmh = parseFloat(val);
+      const v = (steerState.speedKmh * 1000) / 3600;
+      const kSpeed = 0.04;
+      const reduction = 1.0 / (1.0 + v * kSpeed);
+      document.getElementById('lblSimSpeed').innerText = `${steerState.speedKmh} km/h (${(reduction * 100).toFixed(0)}% Lock)`;
+      renderAckermann();
+    }
+
+    const ackermannCanvas = document.getElementById('ackermannCanvas');
+    const ackCtx = ackermannCanvas.getContext('2d');
+
+    function renderAckermann() {
+      const w = ackermannCanvas.width;
+      const h = ackermannCanvas.height;
+      ackCtx.clearRect(0, 0, w, h);
+
+      const v = (steerState.speedKmh * 1000) / 3600;
+      const kSpeed = 0.04;
+      const effectiveAngleDeg = steerState.angleDeg / (1.0 + v * kSpeed);
+      const deltaRad = (effectiveAngleDeg * Math.PI) / 180;
+
+      const L = steerState.wheelbase;
+      const W = steerState.trackWidth;
+
+      let innerDeg = 0;
+      let outerDeg = 0;
+      let turnRadiusM = Infinity;
+
+      if (Math.abs(deltaRad) > 0.001) {
+        const tanDelta = Math.tan(deltaRad);
+        turnRadiusM = L / Math.abs(tanDelta);
+
+        if (deltaRad > 0) { // Right Turn
+          innerDeg = (Math.atan((2 * L * tanDelta) / (2 * L - W * tanDelta)) * 180) / Math.PI;
+          outerDeg = (Math.atan((2 * L * tanDelta) / (2 * L + W * tanDelta)) * 180) / Math.PI;
+        } else { // Left Turn
+          const absTan = Math.abs(tanDelta);
+          innerDeg = -(Math.atan((2 * L * absTan) / (2 * L - W * absTan)) * 180) / Math.PI;
+          outerDeg = -(Math.atan((2 * L * absTan) / (2 * L + W * absTan)) * 180) / Math.PI;
+        }
+      }
+
+      document.getElementById('lblInnerAngle').innerText = innerDeg.toFixed(1) + '°';
+      document.getElementById('lblOuterAngle').innerText = outerDeg.toFixed(1) + '°';
+      document.getElementById('lblTurnRadius').innerText = isFinite(turnRadiusM) ? turnRadiusM.toFixed(1) + ' m' : '∞ (Straight)';
+
+      // Chassis Top-down Schematic
+      const scale = 70; // px per meter
+      const cx = w * 0.45;
+      const cy = h * 0.55;
+
+      const lPx = L * scale;
+      const wPx = W * scale;
+
+      const frontAxleY = cy - lPx / 2;
+      const rearAxleY = cy + lPx / 2;
+      const leftWheelX = cx - wPx / 2;
+      const rightWheelX = cx + wPx / 2;
+
+      // Chassis Backbone
+      ackCtx.strokeStyle = '#222c3d';
+      ackCtx.lineWidth = 14;
+      ackCtx.beginPath();
+      ackCtx.moveTo(cx, frontAxleY);
+      ackCtx.lineTo(cx, rearAxleY);
+      ackCtx.stroke();
+
+      // Axles
+      ackCtx.strokeStyle = '#334155';
+      ackCtx.lineWidth = 6;
+      ackCtx.beginPath();
+      ackCtx.moveTo(leftWheelX, frontAxleY);
+      ackCtx.lineTo(rightWheelX, frontAxleY);
+      ackCtx.moveTo(leftWheelX, rearAxleY);
+      ackCtx.lineTo(rightWheelX, rearAxleY);
+      ackCtx.stroke();
+
+      // Rear Wheels (Fixed)
+      drawTopDownWheel(leftWheelX, rearAxleY, 0, '#64748b');
+      drawTopDownWheel(rightWheelX, rearAxleY, 0, '#64748b');
+
+      // Front Wheels with Steer Angles
+      const leftSteerRad = deltaRad >= 0 ? (outerDeg * Math.PI) / 180 : (innerDeg * Math.PI) / 180;
+      const rightSteerRad = deltaRad >= 0 ? (innerDeg * Math.PI) / 180 : (outerDeg * Math.PI) / 180;
+
+      drawTopDownWheel(leftWheelX, frontAxleY, leftSteerRad, deltaRad < 0 ? '#ff5500' : '#00f0ff');
+      drawTopDownWheel(rightWheelX, frontAxleY, rightSteerRad, deltaRad >= 0 ? '#ff5500' : '#00f0ff');
+
+      // Ackermann Projection Rays to ICR (Turn Center)
+      if (Math.abs(deltaRad) > 0.05) {
+        const icrX = cx + (deltaRad > 0 ? (turnRadiusM * scale) : -(turnRadiusM * scale));
+        const icrY = rearAxleY;
+
+        ackCtx.setLineDash([4, 4]);
+        ackCtx.lineWidth = 1.5;
+
+        // Rear axle projection
+        ackCtx.strokeStyle = '#ffd000';
+        ackCtx.beginPath();
+        ackCtx.moveTo(cx, rearAxleY);
+        ackCtx.lineTo(icrX, icrY);
+        ackCtx.stroke();
+
+        // Front left ray
+        ackCtx.strokeStyle = '#00f0ff';
+        ackCtx.beginPath();
+        ackCtx.moveTo(leftWheelX, frontAxleY);
+        ackCtx.lineTo(icrX, icrY);
+        ackCtx.stroke();
+
+        // Front right ray
+        ackCtx.strokeStyle = '#ff5500';
+        ackCtx.beginPath();
+        ackCtx.moveTo(rightWheelX, frontAxleY);
+        ackCtx.lineTo(icrX, icrY);
+        ackCtx.stroke();
+        ackCtx.setLineDash([]);
+
+        // ICR Marker
+        ackCtx.beginPath();
+        ackCtx.arc(icrX, icrY, 7, 0, Math.PI * 2);
+        ackCtx.fillStyle = '#ffd000';
+        ackCtx.fill();
+        ackCtx.fillStyle = '#fff';
+        ackCtx.font = '600 11px "JetBrains Mono"';
+        ackCtx.fillText('ICR', icrX + 10, icrY - 8);
+      }
+    }
+
+    function drawTopDownWheel(x, y, angleRad, color) {
+      ackCtx.save();
+      ackCtx.translate(x, y);
+      ackCtx.rotate(angleRad);
+      ackCtx.fillStyle = color;
+      ackCtx.beginPath();
+      ackCtx.roundRect(-12, -26, 24, 52, 6);
+      ackCtx.fill();
+      ackCtx.restore();
+    }
+
+    // -------------------------------------------------------------
+    // SIMULATOR 4: Differential
+    // -------------------------------------------------------------
+    let diffState = {
+      type: 'lsd', // 'open', 'locked', 'lsd'
+      gripRatio: 0.5,
+      torqueIn: 600
+    };
+
+    function setDiffType(t) {
+      diffState.type = t;
+      document.getElementById('btnDiffOpen').classList.toggle('active', t === 'open');
+      document.getElementById('btnDiffLocked').classList.toggle('active', t === 'locked');
+      document.getElementById('btnDiffLSD').classList.toggle('active', t === 'lsd');
+      const names = { open: 'Open Differential (50/50)', locked: 'Locked Differential (Spool)', lsd: 'Clutch-Pack LSD' };
+      document.getElementById('lblDiffType').innerText = names[t];
+      renderDiff();
+    }
+
+    function updateDiffGrip(val) {
+      diffState.gripRatio = parseFloat(val) / 100;
+      document.getElementById('lblGripDisparity').innerText = `${Math.round(diffState.gripRatio * 100)}% Left / ${Math.round((1 - diffState.gripRatio) * 100)}% Right`;
+      renderDiff();
+    }
+
+    function updateDiffTorque(val) {
+      diffState.torqueIn = parseFloat(val);
+      document.getElementById('lblInputTorque').innerText = diffState.torqueIn + ' N·m';
+      renderDiff();
+    }
+
+    const diffCanvas = document.getElementById('diffCanvas');
+    const diffCtx = diffCanvas.getContext('2d');
+
+    function renderDiff() {
+      const w = diffCanvas.width;
+      const h = diffCanvas.height;
+      diffCtx.clearRect(0, 0, w, h);
+
+      let tLeft = 0;
+      let tRight = 0;
+
+      if (diffState.type === 'open') {
+        tLeft = diffState.torqueIn * 0.5;
+        tRight = diffState.torqueIn * 0.5;
+      } else if (diffState.type === 'locked') {
+        tLeft = diffState.torqueIn * diffState.gripRatio;
+        tRight = diffState.torqueIn * (1.0 - diffState.gripRatio);
+      } else if (diffState.type === 'lsd') {
+        const bias = 0.35 * (1.0 - diffState.gripRatio * 2);
+        tLeft = diffState.torqueIn * (0.5 - bias);
+        tRight = diffState.torqueIn * (0.5 + bias);
+      }
+
+      document.getElementById('lblTorqueL').innerText = Math.round(tLeft) + ' N·m';
+      document.getElementById('lblTorqueR').innerText = Math.round(tRight) + ' N·m';
+
+      // Bar visualizer
+      const barY = h * 0.5;
+      const barMaxW = 140;
+
+      diffCtx.fillStyle = '#64748b';
+      diffCtx.font = '600 13px "Chakra Petch"';
+      diffCtx.textAlign = 'center';
+      diffCtx.fillText('TORQUE BIAS DISTRIBUTION', w / 2, 40);
+
+      // Left bar
+      const leftW = (tLeft / diffState.torqueIn) * barMaxW * 2;
+      diffCtx.fillStyle = '#ff5500';
+      diffCtx.beginPath();
+      diffCtx.roundRect(w / 2 - leftW - 5, barY - 25, leftW, 50, 4);
+      diffCtx.fill();
+
+      // Right bar
+      const rightW = (tRight / diffState.torqueIn) * barMaxW * 2;
+      diffCtx.fillStyle = '#00f0ff';
+      diffCtx.beginPath();
+      diffCtx.roundRect(w / 2 + 5, barY - 25, rightW, 50, 4);
+      diffCtx.fill();
+
+      diffCtx.fillStyle = '#fff';
+      diffCtx.font = '700 14px "JetBrains Mono"';
+      diffCtx.fillText(`LEFT: ${Math.round(tLeft)} N·m`, w / 2 - 90, barY + 60);
+      diffCtx.fillText(`RIGHT: ${Math.round(tRight)} N·m`, w / 2 + 90, barY + 60);
+    }
+
+    // Initialize animation loops
+    requestAnimationFrame(drivetrainLoop);
+    setInterval(renderSuspension, 25);
+    updateGearUI();
+    renderAckermann();
+    renderDiff();
+  </script>
+</body>
+</html>
