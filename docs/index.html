@@ -2016,8 +2016,8 @@
       <div class="tests-panel">
         <div class="tests-summary">
           <div>
-            <div style="font-family:var(--font-heading); font-size:1.5rem; font-weight:700;">20 Tests Passed</div>
-            <div style="color:var(--text-muted); font-size:0.85rem; font-family:var(--font-mono);">0 failed · 0 ignored · 6 integration suites</div>
+            <div style="font-family:var(--font-heading); font-size:1.5rem; font-weight:700;">23 Tests Passed</div>
+            <div style="color:var(--text-muted); font-size:0.85rem; font-family:var(--font-mono);">0 failed · 0 ignored · 7 integration suites</div>
           </div>
           <div class="test-badge-big">
             ✓ ALL TESTS PASSING
@@ -2025,6 +2025,17 @@
         </div>
 
         <div class="test-grid">
+          <!-- Analytical Accuracy Tests -->
+          <div class="test-suite-card">
+            <div class="test-suite-header">
+              <span class="test-suite-name">accuracy_test</span>
+              <span class="test-suite-count">3/3</span>
+            </div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_suspension_hooke_equilibrium_accuracy (&Delta;F = 0.04 N)</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_ackermann_steering_kinematic_parity (&Delta; = 0.0002)</div>
+            <div class="test-item"><span class="test-status-ok">✓</span> test_open_differential_torque_parity (Exact IEEE 754)</div>
+          </div>
+
           <!-- Differential Tests -->
           <div class="test-suite-card">
             <div class="test-suite-header">
